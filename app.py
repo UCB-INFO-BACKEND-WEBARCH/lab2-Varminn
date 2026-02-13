@@ -11,7 +11,7 @@ from flask import Flask, request, jsonify
 from dotenv import load_dotenv
 from openai import OpenAI
 
-load_dotenv()  # loads variables from .env file
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
 app = Flask(__name__)
 
@@ -144,40 +144,38 @@ def _generate_advice_from_openai(major):
 # TODO: IMPLEMENT THESE TWO ENDPOINTS
 # =============================================================================
 
-# --- Endpoint A: POST /students/<id>/advice ---
-#
-# 1. Look up the student by ID.
-#    → If not found, return 404: {"error": "Student not found"}
-#
-# 2. Check that the student has a non-empty "major".
-#    → If missing or empty, return 400: {"error": "Student major is required to generate advice"}
-#
-# 3. Call _generate_advice_from_openai(major) to get advice.
-#    → If it raises an exception, log the error with app.logger.error(...)
-#      and return 502: {"error": "Upstream AI service failed"}
-#
-# 4. Save the advice into the student dict
-#
-# 5. Return 200 with: {"id": ..., "major": "...", "advice": "..."}
-
 @app.post('/students/<int:student_id>/advice')
 def generate_advice(student_id):
-    pass  # TODO: Replace with your implementation
+    student = students.get(student_id)
+    if not student:
+        return jsonify({"error": "Student not found"}), 404
 
+    major = student.get("major", "")
+    if not major:
+        return jsonify({"error": "Student major is required to generate advice"}), 400
 
-# --- Endpoint B: GET /students/<id>/advice ---
-#
-# 1. Look up the student by ID.
-#    → If not found, return 404: {"error": "Student not found"}
-#
-# 2. Check if the student has a non-empty "advice" field.
-#    → If not, return 404: {"error": "Advice not found for this student"}
-#
-# 3. Return 200 with: {"id": ..., "advice": "..."}
+    try:
+        advice = _generate_advice_from_openai(major)
+    except Exception as e:
+        app.logger.error(f"OpenAI API error: {e}")
+        return jsonify({"error": "Upstream AI service failed"}), 502
+
+    student["advice"] = advice
+
+    return jsonify({"id": student["id"], "major": student["major"], "advice": advice}), 200
+
 
 @app.get('/students/<int:student_id>/advice')
 def get_advice(student_id):
-    pass  # TODO: Replace with your implementation
+    student = students.get(student_id)
+    if not student:
+        return jsonify({"error": "Student not found"}), 404
+
+    advice = student.get("advice")
+    if not advice:
+        return jsonify({"error": "Advice not found for this student"}), 404
+
+    return jsonify({"id": student["id"], "advice": advice}), 200
 
 
 # =============================================================================
